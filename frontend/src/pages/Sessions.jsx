@@ -65,7 +65,12 @@ export default function Sessions() {
               )}
             </div>
             <div style={{display:'flex',gap:16,paddingTop:12,borderTop:'1px solid var(--border-subtle)'}}>
-              {[{v:s.total_present,l:'Present',c:'green'},{v:s.total_late,l:'Late',c:'amber'},{v:s.total_absent,l:'Absent',c:'red'},{v:s.duration_minutes+'m',l:'Duration',c:'text-primary'}].map((x,j) => (
+              {[
+                {v:s.total_present,l:'Present',c:'green'},
+                {v:s.total_late,l:'Late',c:'amber'},
+                {v:s.total_absent,l:'Absent',c:'red'},
+                {v: s.status === 'active' ? '● Live' : (s.duration_minutes > 0 ? s.duration_minutes+'m' : '—'), l:'Duration', c: s.status === 'active' ? 'green' : 'text-primary'}
+              ].map((x,j) => (
                 <div key={j} style={{textAlign:'center',flex:1}}>
                   <div style={{fontSize:'1.2rem',fontWeight:700,color:`var(--accent-${x.c})`}}>{x.v}</div>
                   <div style={{fontSize:'0.68rem',color:'var(--text-muted)',textTransform:'uppercase'}}>{x.l}</div>
