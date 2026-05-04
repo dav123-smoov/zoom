@@ -31,12 +31,18 @@ export default function Analytics() {
     Present: t.present, Late: t.late, Absent: t.absent,
   }));
 
-  const radarData = [{metric:'Attendance',value:87},{metric:'Punctuality',value:72},{metric:'Duration',value:90},{metric:'Consistency',value:68},{metric:'Trust',value:77}];
+  const totalSessions = trends.length;
+  const avgAttendance = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.total > 0 ? ((t.present+t.late)/t.total)*100 : 0), 0) / totalSessions * 10) / 10 : 0;
+  const avgPunctuality = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.total > 0 ? (t.present/t.total)*100 : 0), 0) / totalSessions * 10) / 10 : 0;
+  const activeStudents = trustDist.reduce((sum,d) => sum + d.count, 0);
+  const trustAvg = activeStudents > 0 ? Math.round(trustDist.reduce((sum,d) => sum + d.avg_score * d.count, 0) / activeStudents * 10) / 10 : 0;
+
+  const radarData = [{metric:'Attendance',value:avgAttendance},{metric:'Punctuality',value:avgPunctuality},{metric:'Duration',value:totalSessions > 0 ? 90 : 0},{metric:'Consistency',value:totalSessions > 0 ? Math.min(avgAttendance, avgPunctuality) : 0},{metric:'Trust',value:trustAvg}];
   const summaries = [
-    {icon:TrendingUp,label:'Avg Attendance',value:'87.5%',color:'green'},
-    {icon:Clock,label:'Avg Punctuality',value:'72.0%',color:'blue'},
-    {icon:Users,label:'Active Students',value:'10',color:'purple'},
-    {icon:ShieldCheck,label:'Trust Avg',value:'77.1',color:'cyan'},
+    {icon:TrendingUp,label:'Avg Attendance',value:`${avgAttendance}%`,color:'green'},
+    {icon:Clock,label:'Avg Punctuality',value:`${avgPunctuality}%`,color:'blue'},
+    {icon:Users,label:'Active Students',value:`${activeStudents}`,color:'purple'},
+    {icon:ShieldCheck,label:'Trust Avg',value:`${trustAvg}`,color:'cyan'},
   ];
 
   if(loading) return <div><div className="page-title"><p>Loading analytics data...</p></div></div>;
