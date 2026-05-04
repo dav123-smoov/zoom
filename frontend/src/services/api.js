@@ -5,7 +5,7 @@
  * Performance: Uses combined endpoints to minimize API calls
  */
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = 'https://zoom-production-6dcc.up.railway.app/api';
 
 async function fetchAPI(endpoint, options = {}) {
   const res = await fetch(`${API_URL}${endpoint}`, {
