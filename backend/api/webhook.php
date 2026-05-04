@@ -32,10 +32,11 @@ function handleZoomWebhook(Database $db) {
         exit();
     }
     $event = $input['event'] ?? '';
+    $p = $input['payload']['object']['participant'] ?? [];
+    $m = $input['payload']['object'] ?? [];
+    $displayName = $p['user_name'] ?? '';
+    
     if ($event === 'meeting.participant_joined') {
-        $p = $input['payload']['object']['participant'] ?? [];
-        $m = $input['payload']['object'] ?? [];
-        $displayName = $p['user_name'] ?? '';
         $validator = new NameValidator();
         $v = $validator->validate($displayName);
         $session = findOrCreateSession($db, (string)($m['id'] ?? ''), $m['topic'] ?? 'Untitled');
@@ -48,6 +49,7 @@ function handleZoomWebhook(Database $db) {
             ]);
             $fd = new FraudDetector($db);
             $fd->analyze($student['id'], $session['id'], []);
+            updateSessionTotals($db, $session['id']);
             successResponse(['action' => 'recorded', 'student' => $student['name']]);
         } else {
             $db->insert('fraud_alerts', [
@@ -56,7 +58,37 @@ function handleZoomWebhook(Database $db) {
             ]);
             successResponse(['action' => 'flagged', 'error' => $v['error']]);
         }
-    } else { successResponse(['action' => 'ignored', 'event' => $event]); }
+    } elseif ($event === 'meeting.participant_left') {
+        $validator = new NameValidator();
+        $v = $validator->validate($displayName);
+        if ($v['valid']) {
+            $session = findOrCreateSession($db, (string)($m['id'] ?? ''), $m['topic'] ?? 'Untitled');
+            $stu = $db->select('students', 'id', ['matrix_number' => "eq.{$v['matrix_number']}"]);
+            $att = $db->select('attendance', '*', ['student_id' => "eq.{$stu[0]['id']}", 'session_id' => "eq.{$session['id']}"]);
+            
+            if (!empty($stu) && !empty($att)) {
+                $joinTime = $att[0]['join_time'];
+                $leaveTime = $p['leave_time'] ?? date('c');
+                $dur = max(0, strtotime($leaveTime) - strtotime($joinTime));
+                
+                $db->update('attendance', ['leave_time' => $leaveTime, 'duration_seconds' => $dur],
+                    ['student_id' => "eq.{$stu[0]['id']}", 'session_id' => "eq.{$session['id']}"]);
+                    
+                if ($dur < 600) { // Less than 10 minutes
+                    $db->insert('fraud_alerts', [
+                        'student_id' => $stu[0]['id'], 'session_id' => $session['id'],
+                        'alert_type' => 'short_duration', 'severity' => 'high',
+                        'description' => "Left after " . round($dur/60,1) . " min (< 10 min threshold)",
+                    ]);
+                }
+                updateSessionTotals($db, $session['id']);
+                successResponse(['action' => 'leave_recorded', 'duration' => $dur]);
+            }
+        }
+        successResponse(['action' => 'ignored_leave', 'reason' => 'student or session not found']);
+    } else { 
+        successResponse(['action' => 'ignored', 'event' => $event]); 
+    }
 }
 
 function handleN8nWebhook(Database $db) {
