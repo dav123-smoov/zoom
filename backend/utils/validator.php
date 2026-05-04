@@ -6,26 +6,59 @@
 
 class NameValidator {
     /**
-     * Validates the Name_MatrixNumber format
-     * Expected: "Bolaji_259096010"
+     * Validates display name and extracts Name + Matrix Number
+     * 
+     * Accepted formats:
+     *   "DAVID BOLAJI 220591122"          → Name: David Bolaji,    Matrix: 220591122
+     *   "DAVID BOLAJI ABIODUN 220591122"  → Name: David Bolaji Abiodun, Matrix: 220591122
+     *   "Bolaji_259096010"                → Name: Bolaji,          Matrix: 259096010
+     * 
+     * Rule: The LAST word/part must be a 6-12 digit matrix number.
+     *       Everything before it is the student's name.
      */
     public function validate(string $displayName): array {
-        if (empty(trim($displayName))) {
+        $displayName = trim($displayName);
+        if (empty($displayName)) {
             return ['valid' => false, 'error' => 'Empty display name', 'name' => '', 'matrix_number' => ''];
         }
-        if (strpos($displayName, '_') === false) {
-            return ['valid' => false, 'error' => 'Missing underscore separator. Expected: Name_MatrixNumber', 'name' => $displayName, 'matrix_number' => ''];
+
+        $name = '';
+        $matrix = '';
+
+        // Method 1: Try underscore format first (e.g. "Bolaji_259096010")
+        if (strpos($displayName, '_') !== false) {
+            $parts = explode('_', $displayName, 2);
+            $name = trim($parts[0]);
+            $matrix = trim($parts[1] ?? '');
         }
-        $parts = explode('_', $displayName, 2);
-        $name = trim($parts[0]);
-        $matrix = trim($parts[1] ?? '');
-        if (strlen($name) < 2 || !preg_match('/^[a-zA-Z\s]+$/', $name)) {
-            return ['valid' => false, 'error' => "Invalid name part: '{$name}'. Must be 2+ alpha characters", 'name' => $name, 'matrix_number' => $matrix];
+
+        // Method 2: Space-separated — last word is matrix number
+        // e.g. "DAVID BOLAJI 220591122" or "DAVID BOLAJI ABIODUN 220591122"
+        if (empty($matrix) || !preg_match('/^\d{6,12}$/', $matrix)) {
+            $words = preg_split('/\s+/', $displayName);
+            if (count($words) >= 2) {
+                $lastWord = array_pop($words);
+                if (preg_match('/^\d{6,12}$/', $lastWord)) {
+                    $matrix = $lastWord;
+                    $name = implode(' ', $words);
+                }
+            }
         }
+
+        // Validate name part
+        if (strlen($name) < 2 || !preg_match('/^[a-zA-Z\s\-\.]+$/', $name)) {
+            return ['valid' => false, 'error' => "Could not extract a valid name from: '{$displayName}'", 'name' => $displayName, 'matrix_number' => ''];
+        }
+
+        // Validate matrix number
         if (!preg_match('/^\d{6,12}$/', $matrix)) {
-            return ['valid' => false, 'error' => "Invalid matrix number: '{$matrix}'. Must be 6-12 digits", 'name' => $name, 'matrix_number' => $matrix];
+            return ['valid' => false, 'error' => "Could not find a valid matrix number (6-12 digits) in: '{$displayName}'", 'name' => $name, 'matrix_number' => ''];
         }
-        return ['valid' => true, 'name' => ucfirst(strtolower($name)), 'matrix_number' => $matrix, 'error' => null];
+
+        // Format name: capitalize each word
+        $formattedName = ucwords(strtolower($name));
+
+        return ['valid' => true, 'name' => $formattedName, 'matrix_number' => $matrix, 'error' => null];
     }
 }
 
