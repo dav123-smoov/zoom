@@ -7,17 +7,31 @@
  */
 
 function handleWebhook(Database $db, string $method, array $segments) {
-    if ($method !== 'POST') { errorResponse('POST only', 405); return; }
+    // Log EVERY incoming webhook request for debugging
+    $rawBody = file_get_contents('php://input');
+    $db->insert('webhook_logs', [
+        'method'  => $method,
+        'headers' => json_encode(getallheaders()),
+        'body'    => $rawBody ?: '(empty)',
+    ]);
+    
+    // Accept POST for actual webhooks, but don't block other methods (Zoom may send GET for validation)
     $source = $segments[1] ?? '';
     switch ($source) {
-        case 'zoom': handleZoomWebhook($db); break;
-        case 'n8n':  handleN8nWebhook($db); break;
+        case 'zoom': handleZoomWebhook($db, $rawBody); break;
+        case 'n8n':  handleN8nWebhook($db, $rawBody); break;
+        case 'logs': getWebhookLogs($db); break;
         default: errorResponse('Use /api/webhook/zoom or /api/webhook/n8n', 400);
     }
 }
 
-function handleZoomWebhook(Database $db) {
-    $input = json_decode(file_get_contents('php://input'), true);
+function getWebhookLogs(Database $db) {
+    $logs = $db->select('webhook_logs', '*', [], 'received_at.desc', 20);
+    successResponse($logs);
+}
+
+function handleZoomWebhook(Database $db, string $rawBody) {
+    $input = json_decode($rawBody, true);
     if (!$input) { errorResponse('Invalid JSON', 400); return; }
     if (isset($input['event']) && $input['event'] === 'endpoint.url_validation') {
         $plainToken = $input['payload']['plainToken'];
@@ -91,8 +105,8 @@ function handleZoomWebhook(Database $db) {
     }
 }
 
-function handleN8nWebhook(Database $db) {
-    $input = json_decode(file_get_contents('php://input'), true);
+function handleN8nWebhook(Database $db, string $rawBody) {
+    $input = json_decode($rawBody, true);
     if (!$input) { errorResponse('Invalid JSON from n8n', 400); return; }
     $name = $input['name'] ?? '';
     $matrix = $input['matrix_number'] ?? '';
