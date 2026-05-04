@@ -1,0 +1,89 @@
+{
+  "name": "IAAMS Zoom Attendance Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zoom-attendance",
+        "responseMode": "onReceived",
+        "responseData": "allEntries"
+      },
+      "name": "Zoom Webhook Receiver",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Extract Zoom event data\nconst body = items[0].json;\nconst event = body.event || '';\n\nif (event === 'meeting.participant_joined' || event === 'meeting.participant_left') {\n  const participant = body.payload?.object?.participant || {};\n  const meeting = body.payload?.object || {};\n  const displayName = participant.user_name || '';\n  const meetingId = String(meeting.id || '');\n  const topic = meeting.topic || 'Untitled Session';\n\n  // Parse Name_MatrixNumber format\n  let name = '';\n  let matrixNumber = '';\n  let isValidFormat = false;\n  let formatError = '';\n\n  if (displayName.includes('_')) {\n    const parts = displayName.split('_', 2);\n    name = parts[0].trim();\n    matrixNumber = parts[1]?.trim() || '';\n\n    if (name.length >= 2 && /^[a-zA-Z\\s]+$/.test(name) && /^\\d{6,12}$/.test(matrixNumber)) {\n      isValidFormat = true;\n      name = name.charAt(0).toUpperCase() + name.slice(1).toLowerCase();\n    } else {\n      formatError = `Name or matrix invalid: name='${name}', matrix='${matrixNumber}'`;\n    }\n  } else {\n    formatError = 'Missing underscore separator. Expected: Name_MatrixNumber';\n  }\n\n  return [{\n    json: {\n      name: name,\n      matrix_number: matrixNumber,\n      meeting_id: meetingId,\n      topic: topic,\n      display_name: displayName,\n      join_time: participant.join_time || new Date().toISOString(),\n      leave_time: participant.leave_time || null,\n      is_valid_format: isValidFormat,\n      format_error: formatError,\n      event_type: event === 'meeting.participant_joined' ? 'participant_joined' : 'participant_left',\n      processed_at: new Date().toISOString()\n    }\n  }];\n}\n\n// Ignore other events\nreturn [{ json: { event_type: 'ignored', original_event: event } }];"
+      },
+      "name": "Parse & Validate Name",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json.event_type}}",
+              "operation": "notEqual",
+              "value2": "ignored"
+            }
+          ]
+        }
+      },
+      "name": "Filter Valid Events",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [750, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8080/api/webhook/n8n",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "name", "value": "={{$json.name}}" },
+            { "name": "matrix_number", "value": "={{$json.matrix_number}}" },
+            { "name": "meeting_id", "value": "={{$json.meeting_id}}" },
+            { "name": "topic", "value": "={{$json.topic}}" },
+            { "name": "display_name", "value": "={{$json.display_name}}" },
+            { "name": "join_time", "value": "={{$json.join_time}}" },
+            { "name": "leave_time", "value": "={{$json.leave_time}}" },
+            { "name": "is_valid_format", "value": "={{$json.is_valid_format}}" },
+            { "name": "format_error", "value": "={{$json.format_error}}" },
+            { "name": "event_type", "value": "={{$json.event_type}}" }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Send to PHP Backend",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [1000, 250]
+    },
+    {
+      "parameters": {},
+      "name": "Event Ignored",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1000, 400]
+    }
+  ],
+  "connections": {
+    "Zoom Webhook Receiver": { "main": [[{ "node": "Parse & Validate Name", "type": "main", "index": 0 }]] },
+    "Parse & Validate Name": { "main": [[{ "node": "Filter Valid Events", "type": "main", "index": 0 }]] },
+    "Filter Valid Events": {
+      "main": [
+        [{ "node": "Send to PHP Backend", "type": "main", "index": 0 }],
+        [{ "node": "Event Ignored", "type": "main", "index": 0 }]
+      ]
+    }
+  },
+  "settings": { "executionOrder": "v1" }
+}
