@@ -20,7 +20,16 @@ function handleZoomWebhook(Database $db) {
     $input = json_decode(file_get_contents('php://input'), true);
     if (!$input) { errorResponse('Invalid JSON', 400); return; }
     if (isset($input['event']) && $input['event'] === 'endpoint.url_validation') {
-        echo json_encode(['plainToken' => $input['payload']['plainToken']]); exit();
+        $plainToken = $input['payload']['plainToken'];
+        // Zoom requires HMAC SHA-256 encryption of the plainToken using your Secret Token
+        $secretToken = 'aHJgzmg7Q-yjL4RAe3I3mw'; 
+        $encryptedToken = hash_hmac('sha256', $plainToken, $secretToken);
+        
+        echo json_encode([
+            'plainToken' => $plainToken,
+            'encryptedToken' => $encryptedToken
+        ]);
+        exit();
     }
     $event = $input['event'] ?? '';
     if ($event === 'meeting.participant_joined') {
