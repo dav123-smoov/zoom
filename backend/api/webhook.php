@@ -139,6 +139,9 @@ function handleZoomWebhook(Database $db, string $rawBody) {
                 'total_absent' => $absentCount,
             ], ['id' => "eq.{$session['id']}"]);
 
+            // Recalculate trust scores for ALL students in this session
+            recalculateAllTrustScores($db, $session['id']);
+
             successResponse([
                 'action' => 'meeting_ended',
                 'duration_minutes' => $meetingDurationMin,
@@ -166,6 +169,7 @@ function handleZoomWebhook(Database $db, string $rawBody) {
                 $fd = new FraudDetector($db);
                 $fd->analyze($student['id'], $session['id'], []);
                 updateSessionTotals($db, $session['id']);
+                recalculateTrustScore($db, $student['id']);
                 successResponse(['action' => 'recorded', 'student' => $student['name']]);
             } else {
                 $db->insert('fraud_alerts', [
@@ -240,3 +244,25 @@ function updateSessionTotals(Database $db, string $sessionId): void {
         'total_absent' => count(array_filter($recs, fn($r) => in_array($r['status'], ['absent','suspicious']))),
     ], ['id' => "eq.{$sessionId}"]);
 }
+
+/**
+ * Recalculate trust score for a single student
+ */
+function recalculateTrustScore(Database $db, string $studentId): void {
+    try {
+        $db->rpc('calculate_trust_score', ['p_student_id' => $studentId]);
+    } catch (\Exception $e) {
+        error_log("Trust score calc failed for {$studentId}: " . $e->getMessage());
+    }
+}
+
+/**
+ * Recalculate trust scores for ALL students in a session
+ */
+function recalculateAllTrustScores(Database $db, string $sessionId): void {
+    $records = $db->select('attendance', 'student_id', ['session_id' => "eq.{$sessionId}"]);
+    foreach ($records as $rec) {
+        recalculateTrustScore($db, $rec['student_id']);
+    }
+}
+
