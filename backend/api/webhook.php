@@ -222,11 +222,21 @@ function handleN8nWebhook(Database $db, string $rawBody) {
 }
 
 function findOrCreateSession(Database $db, string $meetingId, string $topic): array {
+    // First try to find existing session
     $e = $db->select('sessions', '*', ['meeting_id' => "eq.{$meetingId}"]);
     if (!empty($e)) return $e[0];
-    $r = $db->insert('sessions', ['meeting_id' => $meetingId, 'topic' => $topic,
-        'course_code' => 'CSC401', 'scheduled_time' => date('c'), 'duration_minutes' => 0, 'status' => 'active']);
-    return $r[0] ?? $r;
+    
+    // Use upsert to handle race condition (meeting.started + participant_joined arrive simultaneously)
+    try {
+        $r = $db->insert('sessions', ['meeting_id' => $meetingId, 'topic' => $topic,
+            'course_code' => 'CSC401', 'scheduled_time' => date('c'), 'duration_minutes' => 0, 'status' => 'active']);
+        return $r[0] ?? $r;
+    } catch (\Exception $e) {
+        // If insert failed due to unique constraint, session was just created by another request
+        $existing = $db->select('sessions', '*', ['meeting_id' => "eq.{$meetingId}"]);
+        if (!empty($existing)) return $existing[0];
+        throw $e;
+    }
 }
 
 function findOrCreateStudent(Database $db, string $name, string $matrix): array {
