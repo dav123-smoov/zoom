@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, CalendarDays, BarChart3,
@@ -9,6 +9,7 @@ import Students from './pages/Students';
 import Sessions from './pages/Sessions';
 import Analytics from './pages/Analytics';
 import FraudAlerts from './pages/FraudAlerts';
+import { api } from './services/api';
 import './App.css';
 
 const PAGE_TITLES = {
@@ -42,7 +43,7 @@ function Header({ onMenuToggle }) {
   );
 }
 
-function Sidebar({ isOpen, onClose }) {
+function Sidebar({ isOpen, onClose, unresolvedCount }) {
   return (
     <>
       {isOpen && <div className="sidebar-overlay" onClick={onClose} />}
@@ -70,7 +71,8 @@ function Sidebar({ isOpen, onClose }) {
               <BarChart3 className="nav-icon" size={20} />Analytics
             </NavLink>
             <NavLink to="/fraud-alerts" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-              <ShieldAlert className="nav-icon" size={20} />Fraud Alerts<span className="nav-badge">4</span>
+              <ShieldAlert className="nav-icon" size={20} />Fraud Alerts
+              {unresolvedCount > 0 && <span className="nav-badge">{unresolvedCount}</span>}
             </NavLink>
           </div>
           <div className="nav-section">
@@ -96,10 +98,27 @@ function Sidebar({ isOpen, onClose }) {
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [unresolvedCount, setUnresolvedCount] = useState(0);
+
+  const fetchUnresolvedCount = () => {
+    api.getFraudAlerts()
+      .then(alerts => {
+        const count = alerts.filter(a => !a.resolved).length;
+        setUnresolvedCount(count);
+      })
+      .catch(err => console.error(err));
+  };
+
+  useEffect(() => {
+    fetchUnresolvedCount();
+    window.addEventListener('alerts-updated', fetchUnresolvedCount);
+    return () => window.removeEventListener('alerts-updated', fetchUnresolvedCount);
+  }, []);
+
   return (
     <Router>
       <div className="app-layout">
-        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} unresolvedCount={unresolvedCount} />
         <Header onMenuToggle={() => setSidebarOpen(!sidebarOpen)} />
         <main className="main-content">
           <Routes>

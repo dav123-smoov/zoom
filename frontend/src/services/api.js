@@ -5,7 +5,7 @@
  * Performance: Uses combined endpoints to minimize API calls
  */
 
-const API_URL = 'https://zoom-production-6dcc.up.railway.app/api';
+const API_URL = 'https://zoom-production-06ba.up.railway.app/api';
 
 async function fetchAPI(endpoint, options = {}) {
   const res = await fetch(`${API_URL}${endpoint}`, {
@@ -42,6 +42,10 @@ export const api = {
   getAttendanceTrends: () => fetchAPI('/analytics/attendance-trends'),
   getFraudAlerts: () => fetchAPI('/analytics/fraud-alerts'),
   getTrustScoreDistribution: () => fetchAPI('/analytics/trust-distribution'),
+  resolveFraudAlert: (alertId) => fetchAPI('/analytics/resolve-alert', {
+    method: 'POST',
+    body: JSON.stringify({ alert_id: alertId })
+  }),
 
   // Export
   exportSessionCSV: (sessionId) => {

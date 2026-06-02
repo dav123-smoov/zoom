@@ -33,11 +33,12 @@ export default function Analytics() {
 
   const totalSessions = trends.length;
   const avgAttendance = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.total > 0 ? ((t.present+t.late)/t.total)*100 : 0), 0) / totalSessions * 10) / 10 : 0;
-  const avgPunctuality = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.total > 0 ? (t.present/t.total)*100 : 0), 0) / totalSessions * 10) / 10 : 0;
+  const avgPunctuality = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.present + t.late > 0 ? (t.present/(t.present+t.late))*100 : 0), 0) / totalSessions * 10) / 10 : 0;
+  const avgDuration = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.avg_duration || 0), 0) / totalSessions * 10) / 10 : 0;
   const activeStudents = trustDist.reduce((sum,d) => sum + d.count, 0);
   const trustAvg = activeStudents > 0 ? Math.round(trustDist.reduce((sum,d) => sum + d.avg_score * d.count, 0) / activeStudents * 10) / 10 : 0;
 
-  const radarData = [{metric:'Attendance',value:avgAttendance},{metric:'Punctuality',value:avgPunctuality},{metric:'Duration',value:totalSessions > 0 ? 90 : 0},{metric:'Consistency',value:totalSessions > 0 ? Math.min(avgAttendance, avgPunctuality) : 0},{metric:'Trust',value:trustAvg}];
+  const radarData = [{metric:'Attendance',value:avgAttendance},{metric:'Punctuality',value:avgPunctuality},{metric:'Duration',value:avgDuration},{metric:'Consistency',value:totalSessions > 0 ? Math.min(avgAttendance, avgPunctuality) : 0},{metric:'Trust',value:trustAvg}];
   const summaries = [
     {icon:TrendingUp,label:'Avg Attendance',value:`${avgAttendance}%`,color:'green'},
     {icon:Clock,label:'Avg Punctuality',value:`${avgPunctuality}%`,color:'blue'},

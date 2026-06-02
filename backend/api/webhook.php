@@ -88,6 +88,27 @@ function handleZoomWebhook(Database $db, string $rawBody) {
                 'status' => 'completed',
             ], ['id' => "eq.{$session['id']}"]);
 
+            // Register explicit 'absent' records for students who never joined this session
+            $allStudents = $db->select('students', 'id');
+            $existingRecords = $db->select('attendance', 'student_id', ['session_id' => "eq.{$session['id']}"]);
+            $existingStudentIds = array_column($existingRecords, 'student_id');
+
+            foreach ($allStudents as $student) {
+                if (!in_array($student['id'], $existingStudentIds)) {
+                    $db->insert('attendance', [
+                        'student_id' => $student['id'],
+                        'session_id' => $session['id'],
+                        'join_time' => $startTime,
+                        'leave_time' => $startTime,
+                        'duration_seconds' => 0,
+                        'status' => 'absent',
+                        'raw_display_name' => '',
+                        'is_suspicious' => false,
+                        'join_count' => 0
+                    ]);
+                }
+            }
+
             // Evaluate ALL attendance records for this session
             $records = $db->select('attendance', '*', ['session_id' => "eq.{$session['id']}"]);
             $presentCount = 0;
