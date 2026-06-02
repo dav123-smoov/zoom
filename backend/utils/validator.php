@@ -99,6 +99,17 @@ class FraudDetector {
     }
 
     private function createAlert(string $studentId, string $sessionId, string $type, string $severity, string $desc): array {
+        // Prevent duplicate unresolved alerts of the same type for the same student and session
+        $existing = $this->db->select('fraud_alerts', 'id', [
+            'student_id' => "eq.{$studentId}",
+            'session_id' => "eq.{$sessionId}",
+            'alert_type' => "eq.{$type}",
+            'resolved' => "eq.false"
+        ]);
+        if (!empty($existing)) {
+            return $existing[0];
+        }
+
         $result = $this->db->insert('fraud_alerts', [
             'student_id' => $studentId, 'session_id' => $sessionId,
             'alert_type' => $type, 'severity' => $severity, 'description' => $desc,

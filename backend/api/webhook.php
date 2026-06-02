@@ -145,11 +145,19 @@ function handleZoomWebhook(Database $db, string $rawBody) {
 
                 // Create fraud alert for students who failed the 50% check
                 if (!$pass && $studentDuration > 0) {
-                    $db->insert('fraud_alerts', [
-                        'student_id' => $rec['student_id'], 'session_id' => $session['id'],
-                        'alert_type' => 'short_duration', 'severity' => 'high',
-                        'description' => "Attended " . round($studentDuration/60) . "m of {$meetingDurationMin}m ({$percentage}%). Required: 50%",
+                    $existing = $db->select('fraud_alerts', 'id', [
+                        'student_id' => "eq.{$rec['student_id']}",
+                        'session_id' => "eq.{$session['id']}",
+                        'alert_type' => "eq.short_duration",
+                        'resolved' => "eq.false"
                     ]);
+                    if (empty($existing)) {
+                        $db->insert('fraud_alerts', [
+                            'student_id' => $rec['student_id'], 'session_id' => $session['id'],
+                            'alert_type' => 'short_duration', 'severity' => 'high',
+                            'description' => "Attended " . round($studentDuration/60) . "m of {$meetingDurationMin}m ({$percentage}%). Required: 50%",
+                        ]);
+                    }
                 }
             }
 
@@ -193,10 +201,19 @@ function handleZoomWebhook(Database $db, string $rawBody) {
                 recalculateTrustScore($db, $student['id']);
                 successResponse(['action' => 'recorded', 'student' => $student['name']]);
             } else {
-                $db->insert('fraud_alerts', [
-                    'session_id' => $session['id'], 'alert_type' => 'invalid_format',
-                    'severity' => 'low', 'description' => "Invalid name: '{$displayName}'. {$v['error']}",
+                $descriptionStr = "Invalid name: '{$displayName}'. {$v['error']}";
+                $existing = $db->select('fraud_alerts', 'id', [
+                    'session_id' => "eq.{$session['id']}",
+                    'alert_type' => "eq.invalid_format",
+                    'description' => "eq.{$descriptionStr}",
+                    'resolved' => "eq.false"
                 ]);
+                if (empty($existing)) {
+                    $db->insert('fraud_alerts', [
+                        'session_id' => $session['id'], 'alert_type' => 'invalid_format',
+                        'severity' => 'low', 'description' => $descriptionStr,
+                    ]);
+                }
                 successResponse(['action' => 'flagged', 'error' => $v['error']]);
             }
             break;
