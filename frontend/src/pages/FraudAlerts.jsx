@@ -6,7 +6,6 @@ const ICONS = {
   short_duration: Clock, 
   multiple_logins: WifiOff, 
   invalid_format: AlertTriangle, 
-  late_pattern: Clock, 
   proxy_suspected: UserX, 
   name_mismatch: AlertTriangle 
 };
@@ -388,7 +387,6 @@ export default function FraudAlerts() {
                         <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.72rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                           {selectedSessionId === 'all' && <span>📚 {alert.session_topic}</span>}
                           <span>🕐 {new Date(alert.created_at).toLocaleString('en', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
-                          <span>🛡️ Trust Score: <strong style={{ color: alert.trust_score >= 60 ? 'var(--accent-amber)' : 'var(--accent-red)' }}>{alert.trust_score}%</strong></span>
                         </div>
                       </div>
                       

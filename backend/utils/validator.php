@@ -67,8 +67,11 @@ class FraudDetector {
     public function __construct(Database $db) { $this->db = $db; }
 
     /**
-     * AI-based fraud analysis
-     * Checks: short duration, multiple logins, late patterns, suspicious behavior
+     * Session-scoped fraud analysis.
+     * Checks: short duration, multiple logins in same session.
+     * Cross-session checks (e.g. late_pattern) intentionally removed —
+     * lecturers use this for multiple different classes, so cross-session
+     * history is not a reliable fraud signal.
      */
     public function analyze(string $studentId, string $sessionId, array $attendance): array {
         $alerts = [];
@@ -83,20 +86,9 @@ class FraudDetector {
             $alerts[] = $this->createAlert($studentId, $sessionId, 'short_duration', 'high',
                 "Only attended " . round($attendance['duration_seconds']/60, 1) . " minutes (threshold: 10 min)");
         }
-        // Check 3: Late pattern - check history
-        $history = $this->db->select('attendance', 'status', ['student_id' => "eq.{$studentId}"]);
-        $total = count($history);
-        $lateCount = count(array_filter($history, fn($h) => $h['status'] === 'late'));
-        if ($total >= 3 && ($lateCount / $total) > 0.5) {
-            $existing = $this->db->select('fraud_alerts', 'id',
-                ['student_id' => "eq.{$studentId}", 'alert_type' => 'eq.late_pattern', 'resolved' => 'eq.false']);
-            if (empty($existing)) {
-                $alerts[] = $this->createAlert($studentId, $sessionId, 'late_pattern', 'medium',
-                    "Late in {$lateCount}/{$total} sessions (" . round(($lateCount/$total)*100) . "%)");
-            }
-        }
         return $alerts;
     }
+
 
     private function createAlert(string $studentId, string $sessionId, string $type, string $severity, string $desc): array {
         // Prevent duplicate unresolved alerts of the same type for the same student and session

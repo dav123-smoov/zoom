@@ -56,10 +56,10 @@ function listStudents(Database $db) {
 
     // Enrich student data with alert counts
     $enriched = array_map(function ($s) use ($alertCounts) {
-        $s['trust_score']   = (float)$s['trust_score'];
         $s['active_alerts'] = $alertCounts[$s['id']] ?? 0;
         return $s;
     }, $students);
+
 
     // Get total count for pagination
     $all = $db->select('students', 'id', $filters);
