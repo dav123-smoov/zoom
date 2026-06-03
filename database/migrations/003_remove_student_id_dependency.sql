@@ -114,15 +114,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Redefine get_attendance_trends
-CREATE OR REPLACE FUNCTION public.get_attendance_trends()
-RETURNS json AS $$
-DECLARE
-    v_result json;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Overwrite get_attendance_trends with correct query logic
+-- Redefine get_attendance_trends with correct query logic
 CREATE OR REPLACE FUNCTION public.get_attendance_trends()
 RETURNS json AS $$
 DECLARE
