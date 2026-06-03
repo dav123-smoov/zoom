@@ -13,12 +13,22 @@ const TT = ({active,payload,label}) => {
 
 export default function Analytics() {
   const [trends, setTrends] = useState([]);
-  const [trustDist, setTrustDist] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.getAttendanceTrends(), api.getTrustScoreDistribution()])
-      .then(([t, td]) => { setTrends(t); setTrustDist(td); setLoading(false); });
+    Promise.all([api.getAttendanceTrends(), api.getDashboardStats(), api.getFraudAlerts()])
+      .then(([t, s, a]) => { 
+        setTrends(t); 
+        setStats(s); 
+        setAlerts(a || []); 
+        setLoading(false); 
+      })
+      .catch(e => {
+        console.error('Analytics load error:', e);
+        setLoading(false);
+      });
   }, []);
 
   const rateData = trends.map(t => ({
@@ -35,18 +45,37 @@ export default function Analytics() {
   const avgAttendance = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.total > 0 ? ((t.present+t.late)/t.total)*100 : 0), 0) / totalSessions * 10) / 10 : 0;
   const avgPunctuality = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.present + t.late > 0 ? (t.present/(t.present+t.late))*100 : 0), 0) / totalSessions * 10) / 10 : 0;
   const avgDuration = totalSessions > 0 ? Math.round(trends.reduce((sum,t) => sum + (t.avg_duration || 0), 0) / totalSessions * 10) / 10 : 0;
-  const activeStudents = trustDist.reduce((sum,d) => sum + d.count, 0);
-  const trustAvg = activeStudents > 0 ? Math.round(trustDist.reduce((sum,d) => sum + d.avg_score * d.count, 0) / activeStudents * 10) / 10 : 0;
+  
+  const activeStudents = stats?.total_students || 0;
+  const unresolvedAlerts = stats?.unresolved_alerts || 0;
 
-  const radarData = [{metric:'Attendance',value:avgAttendance},{metric:'Punctuality',value:avgPunctuality},{metric:'Duration',value:avgDuration},{metric:'Consistency',value:totalSessions > 0 ? Math.min(avgAttendance, avgPunctuality) : 0},{metric:'Trust',value:trustAvg}];
+  const radarData = [
+    {metric:'Attendance',value:avgAttendance},
+    {metric:'Punctuality',value:avgPunctuality},
+    {metric:'Duration',value:Math.min(100, (avgDuration / 60) * 100)},
+    {metric:'Consistency',value:totalSessions > 0 ? Math.min(avgAttendance, avgPunctuality) : 0}
+  ];
+
   const summaries = [
     {icon:TrendingUp,label:'Avg Attendance',value:`${avgAttendance}%`,color:'green'},
     {icon:Clock,label:'Avg Punctuality',value:`${avgPunctuality}%`,color:'blue'},
-    {icon:Users,label:'Active Students',value:`${activeStudents}`,color:'purple'},
-    {icon:ShieldCheck,label:'Trust Avg',value:`${trustAvg}`,color:'cyan'},
+    {icon:Users,label:'Unique Attendees',value:`${activeStudents}`,color:'purple'},
+    {icon:ShieldCheck,label:'Active Alerts',value:`${unresolvedAlerts}`,color:'red'},
   ];
 
-  if(loading) return <div><div className="page-title"><p>Loading analytics data...</p></div></div>;
+  const alertCounts = alerts.reduce((acc, a) => {
+    acc[a.alert_type] = (acc[a.alert_type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const alertChartData = [
+    { name: 'Short Duration', count: alertCounts['short_duration'] || 0, fill: '#ef4444' },
+    { name: 'Multiple Logins', count: alertCounts['multiple_logins'] || 0, fill: '#f59e0b' },
+    { name: 'Name Mismatch', count: alertCounts['name_mismatch'] || 0, fill: '#3b82f6' },
+    { name: 'Proxy Suspected', count: alertCounts['proxy_suspected'] || 0, fill: '#8b5cf6' },
+  ];
+
+  if(loading || !stats) return <div><div className="page-title"><p>Loading analytics data...</p></div></div>;
 
   return (<div>
     <div className="page-title animate-fade-in"><p>Live insights from Supabase · <span style={{color:'var(--accent-green)'}}>🟢 Connected</span></p></div>
@@ -63,8 +92,8 @@ export default function Analytics() {
       <div className="card animate-fade-in"><div className="card-header"><div><div className="card-title">Performance Profile</div></div></div>
         <ResponsiveContainer width="100%" height={300}><RadarChart data={radarData}><PolarGrid stroke="rgba(148,163,184,0.1)"/><PolarAngleAxis dataKey="metric" tick={{fill:'#94a3b8',fontSize:12}}/><PolarRadiusAxis domain={[0,100]} tick={{fill:'#64748b',fontSize:10}} axisLine={false}/><Radar dataKey="value" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.2} strokeWidth={2}/></RadarChart></ResponsiveContainer>
       </div>
-      <div className="card animate-fade-in"><div className="card-header"><div><div className="card-title">Trust Distribution</div></div></div>
-        <ResponsiveContainer width="100%" height={260}><BarChart data={trustDist} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.06)"/><XAxis type="number" tick={{fill:'#64748b',fontSize:11}} tickLine={false} axisLine={false}/><YAxis type="category" dataKey="category" width={120} tick={{fill:'#94a3b8',fontSize:10}} tickLine={false} axisLine={false}/><Tooltip/><Bar dataKey="count" radius={[0,6,6,0]}>{trustDist.map((e,i)=><Cell key={i} fill={e.fill}/>)}</Bar></BarChart></ResponsiveContainer>
+      <div className="card animate-fade-in"><div className="card-header"><div><div className="card-title">Fraud Alerts Breakdown</div></div></div>
+        <ResponsiveContainer width="100%" height={260}><BarChart data={alertChartData} layout="vertical"><CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.06)"/><XAxis type="number" tick={{fill:'#64748b',fontSize:11}} tickLine={false} axisLine={false}/><YAxis type="category" dataKey="name" width={120} tick={{fill:'#94a3b8',fontSize:10}} tickLine={false} axisLine={false}/><Tooltip/><Bar dataKey="count" radius={[0,6,6,0]}>{alertChartData.map((e,i)=><Cell key={i} fill={e.fill}/>)}</Bar></BarChart></ResponsiveContainer>
       </div>
     </div>
   </div>);

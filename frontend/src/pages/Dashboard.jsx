@@ -14,7 +14,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 export default function Dashboard() {
   const [stats, setStats] = useState(null);
   const [trends, setTrends] = useState([]);
-  const [trustDist, setTrustDist] = useState([]);
+  const [attendanceDist, setAttendanceDist] = useState([]);
   const [recentActivity, setRecentActivity] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +27,7 @@ export default function Dashboard() {
         const data = await api.getDashboardAll();
         setStats(data.stats);
         setTrends(data.trends || []);
-        setTrustDist(data.trust_distribution || []);
+        setAttendanceDist(data.attendance_distribution || []);
         setRecentActivity(data.recent_activity || []);
       } catch(e) { console.error('Dashboard load error:', e); }
       setLoading(false);
@@ -39,12 +39,12 @@ export default function Dashboard() {
     <div className="stats-grid">{[...Array(6)].map((_,i)=>(<div key={i} className="stat-card"><div className="skeleton" style={{width:'100%',height:100}}/></div>))}</div></div>);
 
   const statCards = [
-    { label:'Total Students', value:stats.total_students, icon:Users, color:'blue' },
+    { label:'Unique Attendees', value:stats.total_students, icon:Users, color:'blue' },
     { label:'Total Sessions', value:stats.total_sessions, icon:CalendarDays, color:'purple' },
     { label:'Attendance Rate', value:`${stats.attendance_rate}%`, icon:UserCheck, color:'green', change:{value:'+2.3%',dir:'up'} },
-    { label:'Avg Trust Score', value:stats.avg_trust_score.toFixed(1), icon:Activity, color:'cyan' },
+    { label:'Avg Duration', value:stats.avg_duration_minutes !== undefined ? `${stats.avg_duration_minutes}m` : '0m', icon:Clock, color:'cyan' },
     { label:'Active Alerts', value:stats.unresolved_alerts, icon:ShieldAlert, color:'red' },
-    { label:'Low Trust Students', value:stats.low_trust_students, icon:AlertTriangle, color:'amber' },
+    { label:'Total Late Arrivals', value:stats.total_late || 0, icon:Clock, color:'amber' },
   ];
 
   return (<div>
@@ -77,15 +77,15 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
       <div className="card animate-fade-in" style={{animationDelay:'0.3s'}}>
-        <div className="card-header"><div><div className="card-title">Trust Score Distribution</div><div className="card-subtitle">Student trust levels</div></div></div>
+        <div className="card-header"><div><div className="card-title">Attendance Distribution</div><div className="card-subtitle">Overall attendance status breakdown</div></div></div>
         <ResponsiveContainer width="100%" height={280}>
-          <PieChart><Pie data={trustDist} cx="50%" cy="50%" innerRadius={65} outerRadius={100} dataKey="count" nameKey="category" stroke="none" paddingAngle={3}>
-            {trustDist.map((e,i)=>(<Cell key={i} fill={e.fill}/>))}</Pie>
-            <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0].payload;return(<div style={{background:'#1a1f35',border:'1px solid rgba(148,163,184,0.15)',borderRadius:'10px',padding:'12px 16px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}><p style={{color:d.fill,fontWeight:600,fontSize:'0.85rem'}}>{d.category}</p><p style={{color:'#94a3b8',fontSize:'0.78rem'}}>{d.count} students · Avg: {d.avg_score}</p></div>);}}/>
+          <PieChart><Pie data={attendanceDist} cx="50%" cy="50%" innerRadius={65} outerRadius={100} dataKey="count" nameKey="category" stroke="none" paddingAngle={3}>
+            {attendanceDist.map((e,i)=>(<Cell key={i} fill={e.fill}/>))}</Pie>
+            <Tooltip content={({active,payload})=>{if(!active||!payload?.length)return null;const d=payload[0].payload;return(<div style={{background:'#1a1f35',border:'1px solid rgba(148,163,184,0.15)',borderRadius:'10px',padding:'12px 16px',boxShadow:'0 8px 32px rgba(0,0,0,0.4)'}}><p style={{color:d.fill,fontWeight:600,fontSize:'0.85rem'}}>{d.category}</p><p style={{color:'#94a3b8',fontSize:'0.78rem'}}>{d.count} records</p></div>);}}/>
           </PieChart>
         </ResponsiveContainer>
         <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center',marginTop:'4px'}}>
-          {trustDist.map((d,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'0.72rem',color:'#94a3b8'}}><div style={{width:8,height:8,borderRadius:'50%',background:d.fill}}/>{d.category.split(' ')[0]} ({d.count})</div>))}
+          {attendanceDist.map((d,i)=>(<div key={i} style={{display:'flex',alignItems:'center',gap:'6px',fontSize:'0.72rem',color:'#94a3b8'}}><div style={{width:8,height:8,borderRadius:'50%',background:d.fill}}/>{d.category} ({d.count})</div>))}
         </div>
       </div>
     </div>
