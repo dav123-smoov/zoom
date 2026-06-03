@@ -1,11 +1,10 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, CalendarDays, BarChart3,
+  LayoutDashboard, CalendarDays, BarChart3,
   ShieldAlert, Settings, Bell, Search, Menu
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
-import Students from './pages/Students';
 import Sessions from './pages/Sessions';
 import Analytics from './pages/Analytics';
 import FraudAlerts from './pages/FraudAlerts';
@@ -14,7 +13,6 @@ import './App.css';
 
 const PAGE_TITLES = {
   '/': { title: 'Dashboard', subtitle: 'Real-time attendance overview' },
-  '/students': { title: 'Students', subtitle: 'Manage and monitor students' },
   '/sessions': { title: 'Sessions', subtitle: 'Zoom meeting sessions' },
   '/analytics': { title: 'Analytics', subtitle: 'Attendance insights & trends' },
   '/fraud-alerts': { title: 'Fraud Alerts', subtitle: 'Suspicious behavior detection' },
@@ -60,9 +58,6 @@ function Sidebar({ isOpen, onClose, unresolvedCount }) {
             </NavLink>
             <NavLink to="/sessions" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
               <CalendarDays className="nav-icon" size={20} />Sessions
-            </NavLink>
-            <NavLink to="/students" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-              <Users className="nav-icon" size={20} />Students
             </NavLink>
           </div>
           <div className="nav-section">
@@ -123,7 +118,6 @@ function App() {
         <main className="main-content">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/students" element={<Students />} />
             <Route path="/sessions" element={<Sessions />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/fraud-alerts" element={<FraudAlerts />} />

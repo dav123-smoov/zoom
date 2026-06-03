@@ -93,7 +93,7 @@ export default function Sessions() {
           {loadingAttendance ? <div style={{padding:40,textAlign:'center',color:'var(--text-muted)'}}>Loading...</div> : (
             <div className="table-container">
               <table>
-                <thead><tr><th>#</th><th>Student</th><th>Matrix</th><th>Join</th><th>Leave</th><th>Duration</th><th>Status</th><th>Trust</th></tr></thead>
+                <thead><tr><th>#</th><th>Student</th><th>Matrix</th><th>Join</th><th>Leave</th><th>Duration</th><th>% Attended</th><th>Status</th></tr></thead>
                 <tbody>
                   {attendance.map((a,i) => (
                     <tr key={a.id}>
@@ -103,8 +103,8 @@ export default function Sessions() {
                       <td>{new Date(a.join_time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</td>
                       <td>{a.leave_time ? new Date(a.leave_time).toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'}) : '—'}</td>
                       <td>{Math.round(a.duration_seconds/60)} min</td>
+                      <td style={{fontWeight:600,color:a.attendance_percentage>=50?'var(--accent-green)':'var(--accent-red)'}}>{a.attendance_percentage ?? 0}%</td>
                       <td><span className={`badge badge-${a.status}`}>{a.status.charAt(0).toUpperCase()+a.status.slice(1)}</span></td>
-                      <td style={{fontWeight:600,color:a.trust_score>=75?'var(--accent-green)':a.trust_score>=50?'var(--accent-amber)':'var(--accent-red)'}}>{a.trust_score}</td>
                     </tr>
                   ))}
                 </tbody>

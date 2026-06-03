@@ -122,19 +122,22 @@ function handleZoomWebhook(Database $db, string $rawBody) {
                 elseif ($status === 'late') $lateCount++;
                 else $absentCount++;
 
-                // Create fraud alert for students who failed the 50% check
+                // Create fraud alert for participants who failed the 50% duration check
                 if (!$pass && $studentDuration > 0) {
                     $existing = $db->select('fraud_alerts', 'id', [
-                        'student_id' => "eq.{$rec['student_id']}",
-                        'session_id' => "eq.{$session['id']}",
-                        'alert_type' => "eq.short_duration",
-                        'resolved' => "eq.false"
+                        'matrix_number' => "eq.{$rec['matrix_number']}",
+                        'session_id'    => "eq.{$session['id']}",
+                        'alert_type'    => "eq.short_duration",
+                        'resolved'      => "eq.false"
                     ]);
                     if (empty($existing)) {
                         $db->insert('fraud_alerts', [
-                            'student_id' => $rec['student_id'], 'session_id' => $session['id'],
-                            'alert_type' => 'short_duration', 'severity' => 'high',
-                            'description' => "Attended " . round($studentDuration/60) . "m of {$meetingDurationMin}m ({$percentage}%). Required: 50%",
+                            'student_name'  => $rec['student_name'],
+                            'matrix_number' => $rec['matrix_number'],
+                            'session_id'    => $session['id'],
+                            'alert_type'    => 'short_duration',
+                            'severity'      => 'high',
+                            'description'   => "Attended " . round($studentDuration/60) . "m of {$meetingDurationMin}m ({$percentage}%). Required: 50%",
                         ]);
                     }
                 }
@@ -165,28 +168,35 @@ function handleZoomWebhook(Database $db, string $rawBody) {
             $v = $validator->validate($displayName);
             $session = findOrCreateSession($db, $meetingId, $topic);
             if ($v['valid']) {
-                $student = findOrCreateStudent($db, $v['name'], $v['matrix_number']);
+                // Store identity directly in attendance row — no students table needed
                 $db->upsert('attendance', [
-                    'student_id' => $student['id'], 'session_id' => $session['id'],
-                    'join_time' => $p['join_time'] ?? date('c'), 'status' => 'present',
-                    'raw_display_name' => $displayName, 'is_suspicious' => false,
+                    'student_name'  => $v['name'],
+                    'matrix_number' => $v['matrix_number'],
+                    'session_id'    => $session['id'],
+                    'join_time'     => $p['join_time'] ?? date('c'),
+                    'status'        => 'present',
+                    'raw_display_name' => $displayName,
+                    'is_suspicious' => false,
                 ]);
                 $fd = new FraudDetector($db);
-                $fd->analyze($student['id'], $session['id'], []);
+                $fd->analyze($v['name'], $v['matrix_number'], $session['id'], []);
                 updateSessionTotals($db, $session['id']);
-                successResponse(['action' => 'recorded', 'student' => $student['name']]);
+                successResponse(['action' => 'recorded', 'student' => $v['name']]);
             } else {
+                // Flag invalid display name format as a fraud alert
                 $descriptionStr = "Invalid name: '{$displayName}'. {$v['error']}";
                 $existing = $db->select('fraud_alerts', 'id', [
                     'session_id' => "eq.{$session['id']}",
                     'alert_type' => "eq.invalid_format",
                     'description' => "eq.{$descriptionStr}",
-                    'resolved' => "eq.false"
+                    'resolved'   => "eq.false"
                 ]);
                 if (empty($existing)) {
                     $db->insert('fraud_alerts', [
-                        'session_id' => $session['id'], 'alert_type' => 'invalid_format',
-                        'severity' => 'low', 'description' => $descriptionStr,
+                        'session_id'  => $session['id'],
+                        'alert_type'  => 'invalid_format',
+                        'severity'    => 'low',
+                        'description' => $descriptionStr,
                     ]);
                 }
                 successResponse(['action' => 'flagged', 'error' => $v['error']]);
@@ -203,21 +213,20 @@ function handleZoomWebhook(Database $db, string $rawBody) {
             $v = $validator->validate($displayName);
             if ($v['valid']) {
                 $session = findOrCreateSession($db, $meetingId, $topic);
-                $stu = $db->select('students', 'id', ['matrix_number' => "eq.{$v['matrix_number']}"]);
-                if (!empty($stu)) {
-                    $att = $db->select('attendance', '*', [
-                        'student_id' => "eq.{$stu[0]['id']}", 'session_id' => "eq.{$session['id']}"
-                    ]);
-                    if (!empty($att)) {
-                        $leaveTime = $p['leave_time'] ?? date('c');
-                        $dur = max(0, strtotime($leaveTime) - strtotime($att[0]['join_time']));
-                        $db->update('attendance', [
-                            'leave_time' => $leaveTime,
-                            'duration_seconds' => $dur,
-                        ], ['id' => "eq.{$att[0]['id']}"]);
-                        updateSessionTotals($db, $session['id']);
-                        successResponse(['action' => 'leave_recorded', 'duration_seconds' => $dur]);
-                    }
+                // Find attendance by matrix_number + session_id — no students table needed
+                $att = $db->select('attendance', '*', [
+                    'matrix_number' => "eq.{$v['matrix_number']}",
+                    'session_id'    => "eq.{$session['id']}"
+                ]);
+                if (!empty($att)) {
+                    $leaveTime = $p['leave_time'] ?? date('c');
+                    $dur = max(0, strtotime($leaveTime) - strtotime($att[0]['join_time']));
+                    $db->update('attendance', [
+                        'leave_time'       => $leaveTime,
+                        'duration_seconds' => $dur,
+                    ], ['id' => "eq.{$att[0]['id']}"]);
+                    updateSessionTotals($db, $session['id']);
+                    successResponse(['action' => 'leave_recorded', 'duration_seconds' => $dur]);
                 }
             }
             successResponse(['action' => 'ignored_leave']);
@@ -252,12 +261,8 @@ function findOrCreateSession(Database $db, string $meetingId, string $topic): ar
     }
 }
 
-function findOrCreateStudent(Database $db, string $name, string $matrix): array {
-    $e = $db->select('students', '*', ['matrix_number' => "eq.{$matrix}"]);
-    if (!empty($e)) return $e[0];
-    $r = $db->insert('students', ['name' => $name, 'matrix_number' => $matrix]);
-    return $r[0] ?? $r;
-}
+// findOrCreateStudent() removed — student identity is now stored inline
+// in each attendance/fraud_alerts row (student_name + matrix_number columns)
 
 function updateSessionTotals(Database $db, string $sessionId): void {
     $recs = $db->select('attendance', 'status', ['session_id' => "eq.{$sessionId}"]);

@@ -71,36 +71,33 @@ function getSession(Database $db, string $id) {
 }
 
 function getSessionAttendance(Database $db, string $sessionId) {
-    // SQL: SELECT a.*, s.name, s.matrix_number, s.trust_score
-    //      FROM attendance a
-    //      JOIN students s ON a.student_id = s.id
-    //      WHERE a.session_id = $sessionId
-    //      ORDER BY a.join_time ASC
+    // Read student identity directly from attendance columns — no JOIN needed
     $records = $db->select(
         'attendance',
-        'id,join_time,leave_time,duration_seconds,status,is_suspicious,raw_display_name,join_count,students!inner(name,matrix_number,trust_score)',
+        'id,student_name,matrix_number,join_time,leave_time,duration_seconds,status,is_suspicious,raw_display_name,join_count,attendance_percentage',
         ['session_id' => "eq.{$sessionId}"],
         'join_time.asc'
     );
 
     $attendance = array_map(function ($a) {
         return [
-            'id'               => $a['id'],
-            'student_name'     => $a['students']['name'],
-            'matrix_number'    => $a['students']['matrix_number'],
-            'trust_score'      => (float)$a['students']['trust_score'],
-            'join_time'        => $a['join_time'],
-            'leave_time'       => $a['leave_time'],
-            'duration_seconds' => $a['duration_seconds'],
-            'status'           => $a['status'],
-            'is_suspicious'    => $a['is_suspicious'],
-            'raw_display_name' => $a['raw_display_name'],
-            'join_count'       => $a['join_count'],
+            'id'                   => $a['id'],
+            'student_name'         => $a['student_name'] ?? $a['raw_display_name'] ?? 'Unknown',
+            'matrix_number'        => $a['matrix_number'] ?? '—',
+            'join_time'            => $a['join_time'],
+            'leave_time'           => $a['leave_time'],
+            'duration_seconds'     => $a['duration_seconds'],
+            'attendance_percentage'=> $a['attendance_percentage'] ?? 0,
+            'status'               => $a['status'],
+            'is_suspicious'        => $a['is_suspicious'],
+            'raw_display_name'     => $a['raw_display_name'],
+            'join_count'           => $a['join_count'],
         ];
     }, $records);
 
     successResponse($attendance);
 }
+
 
 function createSession(Database $db) {
     $input = json_decode(file_get_contents('php://input'), true);

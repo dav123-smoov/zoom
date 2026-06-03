@@ -69,42 +69,49 @@ class FraudDetector {
     /**
      * Session-scoped fraud analysis.
      * Checks: short duration, multiple logins in same session.
-     * Cross-session checks (e.g. late_pattern) intentionally removed —
-     * lecturers use this for multiple different classes, so cross-session
-     * history is not a reliable fraud signal.
+     * Uses matrix_number + session_id for lookups — no students table.
      */
-    public function analyze(string $studentId, string $sessionId, array $attendance): array {
+    public function analyze(string $studentName, string $matrixNumber, string $sessionId, array $attendance): array {
         $alerts = [];
-        // Check 1: Multiple logins in same session
-        $records = $this->db->select('attendance', 'id,join_count', ['student_id' => "eq.{$studentId}", 'session_id' => "eq.{$sessionId}"]);
+
+        // Check 1: Multiple logins in same session (same matrix_number joined > 3 times)
+        $records = $this->db->select('attendance', 'id,join_count', [
+            'matrix_number' => "eq.{$matrixNumber}",
+            'session_id'    => "eq.{$sessionId}"
+        ]);
         if (!empty($records) && ($records[0]['join_count'] ?? 0) > 3) {
-            $alerts[] = $this->createAlert($studentId, $sessionId, 'multiple_logins', 'medium',
+            $alerts[] = $this->createAlert($studentName, $matrixNumber, $sessionId, 'multiple_logins', 'medium',
                 "Joined session " . $records[0]['join_count'] . " times (threshold: 3)");
         }
-        // Check 2: Short duration (if leave_time exists)
+
+        // Check 2: Short duration (if duration_seconds is provided at join time)
         if (!empty($attendance['duration_seconds']) && $attendance['duration_seconds'] < 600) {
-            $alerts[] = $this->createAlert($studentId, $sessionId, 'short_duration', 'high',
-                "Only attended " . round($attendance['duration_seconds']/60, 1) . " minutes (threshold: 10 min)");
+            $alerts[] = $this->createAlert($studentName, $matrixNumber, $sessionId, 'short_duration', 'high',
+                "Only attended " . round($attendance['duration_seconds'] / 60, 1) . " minutes (threshold: 10 min)");
         }
+
         return $alerts;
     }
 
-
-    private function createAlert(string $studentId, string $sessionId, string $type, string $severity, string $desc): array {
-        // Prevent duplicate unresolved alerts of the same type for the same student and session
+    private function createAlert(string $studentName, string $matrixNumber, string $sessionId, string $type, string $severity, string $desc): array {
+        // Prevent duplicate unresolved alerts of the same type for same matrix + session
         $existing = $this->db->select('fraud_alerts', 'id', [
-            'student_id' => "eq.{$studentId}",
-            'session_id' => "eq.{$sessionId}",
-            'alert_type' => "eq.{$type}",
-            'resolved' => "eq.false"
+            'matrix_number' => "eq.{$matrixNumber}",
+            'session_id'    => "eq.{$sessionId}",
+            'alert_type'    => "eq.{$type}",
+            'resolved'      => "eq.false"
         ]);
         if (!empty($existing)) {
             return $existing[0];
         }
 
         $result = $this->db->insert('fraud_alerts', [
-            'student_id' => $studentId, 'session_id' => $sessionId,
-            'alert_type' => $type, 'severity' => $severity, 'description' => $desc,
+            'student_name'  => $studentName,
+            'matrix_number' => $matrixNumber,
+            'session_id'    => $sessionId,
+            'alert_type'    => $type,
+            'severity'      => $severity,
+            'description'   => $desc,
         ]);
         return $result[0] ?? $result;
     }
